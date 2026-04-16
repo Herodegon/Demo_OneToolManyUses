@@ -219,7 +219,7 @@ MonoBehaviour:
   m_ChildAlignment: 0
   m_Spacing: 0
   m_ChildForceExpandWidth: 1
-  m_ChildForceExpandHeight: 0
+  m_ChildForceExpandHeight: 1
   m_ChildControlWidth: 0
   m_ChildControlHeight: 0
   m_ChildScaleWidth: 0
@@ -1301,7 +1301,7 @@ Transform:
   m_GameObject: {fileID: 746671215}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: -0.02873, y: -0.69344, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -2724,11 +2724,11 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 4229642661930182466, guid: f4f205ccad6926142858ba7bdf9d0921, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 0
+      value: 0.02873
       objectReference: {fileID: 0}
     - target: {fileID: 4229642661930182466, guid: f4f205ccad6926142858ba7bdf9d0921, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 1
+      value: 1.69344
       objectReference: {fileID: 0}
     - target: {fileID: 4229642661930182466, guid: f4f205ccad6926142858ba7bdf9d0921, type: 3}
       propertyPath: m_LocalPosition.z

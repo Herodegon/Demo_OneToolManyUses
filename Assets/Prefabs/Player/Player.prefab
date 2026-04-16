@@ -197,14 +197,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1b85aaee7016ee444a7bc8fae7af8052, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerController
+  pushObstacleLayers:
+    serializedVersion: 2
+    m_Bits: 1
   hands: {fileID: 1709418321973743723}
-  handsRb2D: {fileID: 0}
-  handExtendSpeed: 8
+  handExtendSpeed: 10
   handRotationSpeed: 20
-  minReach: 0.9
-  maxReach: 2.3
+  minReach: 0.5
+  maxReach: 2.7
   capsule: {fileID: 218530006458910880}
   ellipsePadding: 0.02
+  centerHeightOffset: 0.15
 --- !u!1 &9202078662510236815
 GameObject:
   m_ObjectHideFlags: 0
@@ -282,25 +285,9 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 4229642661930182466}
     m_Modifications:
-    - target: {fileID: 293046620203390440, guid: 6da6cfdb057cd8349b5b01bb75665d88, type: 3}
-      propertyPath: m_Layer
-      value: 6
-      objectReference: {fileID: 0}
-    - target: {fileID: 769352234802013273, guid: 6da6cfdb057cd8349b5b01bb75665d88, type: 3}
-      propertyPath: m_Layer
-      value: 6
-      objectReference: {fileID: 0}
     - target: {fileID: 2272087820013573028, guid: 6da6cfdb057cd8349b5b01bb75665d88, type: 3}
       propertyPath: m_Name
       value: Hands
-      objectReference: {fileID: 0}
-    - target: {fileID: 2272087820013573028, guid: 6da6cfdb057cd8349b5b01bb75665d88, type: 3}
-      propertyPath: m_Layer
-      value: 6
-      objectReference: {fileID: 0}
-    - target: {fileID: 5699710616202387823, guid: 6da6cfdb057cd8349b5b01bb75665d88, type: 3}
-      propertyPath: m_Layer
-      value: 6
       objectReference: {fileID: 0}
     - target: {fileID: 6503345344931221503, guid: 6da6cfdb057cd8349b5b01bb75665d88, type: 3}
       propertyPath: m_LocalPosition.x

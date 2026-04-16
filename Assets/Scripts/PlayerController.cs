@@ -1,12 +1,17 @@
+using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-[RequireComponent(typeof(PlayerInput))]
+[RequireComponent(typeof(PlayerInput), typeof(Rigidbody2D))]
 public class PlayerController : MonoBehaviour
 {
+    public event Action<string, float> OnDebugValueChanged;
+    
+    [Header("Player Settings")]
+    public LayerMask pushObstacleLayers;
+
     [Header("Hand Settings")]
     public GameObject hands;
-    public Rigidbody2D handsRb2D;
     public float handExtendSpeed = 10f;
     public float handRotationSpeed = 10f;
     [SerializeField] private float minReach = 0.9f;
@@ -15,26 +20,42 @@ public class PlayerController : MonoBehaviour
     [Header("Collider Settings")]
     [SerializeField] private CapsuleCollider2D capsule;
     [SerializeField] private float ellipsePadding = 0.02f;
+    [SerializeField] private float centerHeightOffset = 0.25f;
+    
+    private Rigidbody2D playerRb2D;
+    private Rigidbody2D handsRb2D;
     private InputActionAsset inputActions;
 
     private float ellipseX; // world-space radius along local X
     private float ellipseY; // world-space radius along local Y
     private Vector2 centerWorld;
 
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
-    void Start()
+    #region Runtime Physics Variables
+    private Vector2 forceVectorWorld;
+
+    #endregion
+
+    #region Debug Variables
+    private LineRenderer collisionRender;
+    private BoxCollider2D handsBoxCollider;
+
+    #endregion
+
+    void Awake()
     {
         inputActions = GetComponent<PlayerInput>().actions;
         inputActions.Disable();
         inputActions.FindActionMap("Player").Enable();
 
+        playerRb2D = GetComponent<Rigidbody2D>();
         handsRb2D = hands.GetComponent<Rigidbody2D>();
+        handsBoxCollider = hands.GetComponentInChildren<BoxCollider2D>();
 
+        CreateHandsColliderLineRenderer();
         RecalculateEllipseFromCapsule();
     }
 
     #region Unity Lifecycle
-    // Update is called once per frame
     void Update()
     {
         return;
@@ -46,10 +67,14 @@ public class PlayerController : MonoBehaviour
         RotateHands(Time.fixedDeltaTime);
     }
 
+    void LateUpdate()
+    {
+        DrawHandsCollider();
+    }
+
     #endregion
 
     #region Physics Updates
-
     private void RecalculateEllipseFromCapsule()
     {
         Vector3 s = transform.lossyScale;
@@ -59,7 +84,7 @@ public class PlayerController : MonoBehaviour
         );
         ellipseX = worldSize.x * 0.5f + ellipsePadding;
         ellipseY = worldSize.y * 0.5f + ellipsePadding;
-        centerWorld = transform.TransformPoint(capsule.offset);
+        centerWorld = transform.TransformPoint(capsule.offset + new Vector2(0, centerHeightOffset));
     }
 
     #endregion
@@ -77,6 +102,8 @@ public class PlayerController : MonoBehaviour
         // Keep ellipse data in sync with current transform/collider values.
         RecalculateEllipseFromCapsule();
         Vector2 center = centerWorld;
+        PublishDebugValue("Center X", center.x);
+        PublishDebugValue("Center Y", center.y);
         Vector2 toMouseWorld = mouseWorld - center;
 
         // Use current hand direction if cursor is exactly at center.
@@ -103,6 +130,7 @@ public class PlayerController : MonoBehaviour
             (toMouseWorld.y * toMouseWorld.y) / (ellipseY * ellipseY)
         );
         float clampedReach = Mathf.Clamp(mouseEllipseDistance, minReach, maxReach);
+        PublishDebugValue("Reach", clampedReach);
 
         Vector2 targetLocal = localDirection * (boundaryScale * clampedReach);
         Vector2 targetWorld = center + (Vector2)(transform.rotation * targetLocal);
@@ -114,9 +142,60 @@ public class PlayerController : MonoBehaviour
 
     private void RotateHands(float delta)
     {
-        var direction = hands.transform.position - transform.position;
-        var angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg + 90f;
-        hands.transform.rotation = Quaternion.Lerp(hands.transform.rotation, Quaternion.Euler(0, 0, angle), handRotationSpeed * delta);
+        Vector2 direction = hands.transform.position - transform.position;
+        float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg + 90f;
+        PublishDebugValue("Hands Angle", angle);
+
+        float next = Mathf.LerpAngle(handsRb2D.rotation, angle, handRotationSpeed * delta);
+        handsRb2D.MoveRotation(next);
+    }
+
+    #endregion
+
+    #region Event Handlers
+    private void PublishDebugValue(string name, float value)
+    {
+        OnDebugValueChanged?.Invoke(name, value);
+    }
+
+    #endregion
+
+    #region Debug Methods
+    private void CreateHandsColliderLineRenderer()
+    {
+        collisionRender = gameObject.AddComponent<LineRenderer>();
+        collisionRender.useWorldSpace = true;
+        collisionRender.loop = true;
+        collisionRender.widthMultiplier = 1f;
+        collisionRender.startWidth = 0.03f;
+        collisionRender.endWidth = 0.03f;
+        collisionRender.material = new Material(Shader.Find("Sprites/Default"));
+        collisionRender.startColor = Color.cyan;
+        collisionRender.endColor = Color.cyan;
+        collisionRender.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        collisionRender.receiveShadows = false;
+        collisionRender.sortingOrder = 100;
+    }
+
+    private void DrawHandsCollider()
+    {
+        if (collisionRender == null || handsBoxCollider == null || !handsBoxCollider.enabled)
+        {
+            if (collisionRender != null)
+                collisionRender.positionCount = 0;
+            return;
+        }
+
+        collisionRender.loop = true;
+        Transform t = handsBoxCollider.transform;
+        Vector2 o = handsBoxCollider.offset;
+        Vector2 h = handsBoxCollider.size * 0.5f;
+
+        collisionRender.positionCount = 4;
+        collisionRender.SetPosition(0, t.TransformPoint(o + new Vector2(-h.x, -h.y)));
+        collisionRender.SetPosition(1, t.TransformPoint(o + new Vector2(h.x, -h.y)));
+        collisionRender.SetPosition(2, t.TransformPoint(o + new Vector2(h.x, h.y)));
+        collisionRender.SetPosition(3, t.TransformPoint(o + new Vector2(-h.x, h.y)));
     }
 
     #endregion

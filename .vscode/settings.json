@@ -67,5 +67,9 @@
         "*.sln": "*.csproj",
         "*.slnx": "*.csproj"
     },
-    "dotnet.defaultSolution": "Demo_OneToolManyUses.slnx"
+    "dotnet.defaultSolution": "Demo_OneToolManyUses.slnx",
+    "dotrush.roslyn.projectOrSolutionFiles": [
+        "c:\\Users\\herod\\Documents\\Unity Projects\\Demo_OneToolManyUses\\Demo_OneToolManyUses.slnx",
+        "c:\\Users\\herod\\Documents\\Unity Projects\\Demo_OneToolManyUses\\Assembly-CSharp-Editor.csproj"
+    ]
 }

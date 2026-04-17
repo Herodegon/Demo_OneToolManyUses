@@ -2,10 +2,17 @@ using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
+public enum PlayerState
+{
+    Idle,
+    Grabbing
+}
+
 [RequireComponent
 (
     typeof(PlayerInput), 
-    typeof(Rigidbody2D)
+    typeof(Rigidbody2D),
+    typeof(TargetJoint2D)
 )]
 public class PlayerController : MonoBehaviour
 {
@@ -13,31 +20,32 @@ public class PlayerController : MonoBehaviour
     
     [Header("Player Settings")]
     public LayerMask interactableLayers;
-    public AnimationCurve forceCurve;
+    private PlayerState currState = PlayerState.Idle;
 
     [Header("Hand Settings")]
     public GameObject hands;
-    public float handExtendSpeed = 10f;
-    public float handRotationSpeed = 10f;
     public float pushStrength = 10f;
+
     [SerializeField] private float minReach = 0.9f;
     [SerializeField] private float maxReach = 2.0f;
 
-    [Header("Collider Settings")]
-    [SerializeField] private CapsuleCollider2D capsule;
-    [SerializeField] private float ellipsePadding = 0.02f;
-    [SerializeField] private float centerHeightOffset = 0.25f;
+    [Header("Grab Settings")]
+    [SerializeField] private float grabHoldForce = 10000f;
+
+    private float defaultHoldForce;
+    private bool isColliding = false;
     
-    #region Physics Variables
+    #region Rigidbody2D Components
     private Rigidbody2D playerRb2D;
     private Rigidbody2D handsRb2D;
-    private InputActionAsset inputActions;
+    
+    #endregion
 
-    private float ellipseX; // world-space radius along local X
-    private float ellipseY; // world-space radius along local Y
-    private Vector2 centerWorld;
+    #region Joint2D Components
+    private TargetJoint2D playerTargetJoint;
+    private TargetJoint2D handsTargetJoint;
+    private InputActionAsset inputActions;
     private Vector2 mouseWorld;
-    private Vector2 handsTargetWorld;
 
     #endregion
 
@@ -60,15 +68,50 @@ public class PlayerController : MonoBehaviour
 
         handsCollisionLineRender = GlobalHelper.CreateLineRenderer(hands, LineRendererType.Ellipse, Color.cyan);
         mouseToHandsLineRender = GlobalHelper.CreateLineRenderer(gameObject, LineRendererType.Linear, Color.red);
-        RecalculateEllipseFromCapsule();
+    }
+
+    void Start()
+    {
+        handsTargetJoint = hands.GetComponent<TargetJoint2D>();
+        playerTargetJoint = GetComponent<TargetJoint2D>();
+        playerTargetJoint.enabled = false;
+
+        defaultHoldForce = handsTargetJoint.maxForce;
     }
 
     #region Unity Lifecycle
     void FixedUpdate() 
     {
-        MoveHands(Time.fixedDeltaTime);
-        RotateHands(Time.fixedDeltaTime);
-        ComputePushForce(Time.fixedDeltaTime);
+        mouseWorld = Camera.main.ScreenToWorldPoint(inputActions["MousePosition"].ReadValue<Vector2>());
+
+        // Clamp the target to within [minReach, maxReach] of the body so the
+        // TargetJoint2D never has to fight the DistanceJoint2D. Without this,
+        // pulling the mouse past maxReach makes the distance joint drag the
+        // body toward the hand.
+        Vector2 toMouse = mouseWorld - (Vector2)transform.position;
+        float dist = toMouse.magnitude;
+        Vector2 dir = dist > 0.0001f ? toMouse / dist : Vector2.up;
+        float clampedDist = Mathf.Clamp(dist, minReach, maxReach);
+        Vector2 reaction = Vector2.zero;
+        switch (currState)
+        {
+            case PlayerState.Idle:
+                handsTargetJoint.target = (Vector2)transform.position + dir * clampedDist;
+                reaction = -handsTargetJoint.reactionForce * pushStrength;
+                playerRb2D.AddForceAtPosition(reaction, handsRb2D.position);
+                break;
+            case PlayerState.Grabbing:
+                playerTargetJoint.target = (Vector2)hands.transform.position + -dir * clampedDist;
+                reaction = -playerTargetJoint.reactionForce * pushStrength;
+                handsRb2D.AddForceAtPosition(reaction, playerRb2D.position);
+                break;
+        }
+
+        isColliding = handsRb2D.IsTouchingLayers(interactableLayers);
+        PublishDebugValue("Is Colliding", isColliding ? 1 : 0);
+
+        if (!isColliding) return;
+        PublishDebugValue("Reaction", reaction.magnitude);
     }
 
     void LateUpdate()
@@ -77,95 +120,34 @@ public class PlayerController : MonoBehaviour
         DrawMouseToHandsLine();
     }
 
-    #endregion
-
-    #region Physics Updates
-    private void RecalculateEllipseFromCapsule()
+    public void OnGrab(InputValue value)
     {
-        Vector3 s = transform.lossyScale;
-        Vector2 worldSize = new(
-            capsule.size.x * Mathf.Abs(s.x),
-            capsule.size.y * Mathf.Abs(s.y)
-        );
-        ellipseX = worldSize.x * 0.5f + ellipsePadding;
-        ellipseY = worldSize.y * 0.5f + ellipsePadding;
-        centerWorld = transform.TransformPoint(capsule.offset + new Vector2(0, centerHeightOffset));
+        if (!isColliding) return;
+
+        bool pressed = value.isPressed;
+        if (pressed && currState == PlayerState.Idle) BeginGrab();
+        else if (!pressed && currState == PlayerState.Grabbing) EndGrab();
     }
 
-    #endregion
-
-    #region Hand Movement
-    private void MoveHands(float delta)
+    private void BeginGrab()
     {
-        var mousePosition = inputActions.FindAction("HandPosition").ReadValue<Vector2>();
-        var cameraMain = Camera.main;
-        if (cameraMain == null || hands == null || capsule == null) return;
+        currState = PlayerState.Grabbing;
 
-        mouseWorld = (Vector2)cameraMain.ScreenToWorldPoint(mousePosition);
+        // Pin the hand to where it currently is in world space. The TargetJoint
+        // becomes the pivot and its maxForce spikes so the swinging body can't
+        // drag it off.
+        handsTargetJoint.target = handsRb2D.position;
+        handsTargetJoint.maxForce = grabHoldForce;
 
-        // Keep ellipse data in sync with current transform/collider values.
-        RecalculateEllipseFromCapsule();
-        Vector2 center = centerWorld;
-        PublishDebugValue("Center X", center.x);
-        PublishDebugValue("Center Y", center.y);
-        Vector2 toMouseWorld = mouseWorld - centerWorld;
-
-        // Use current hand direction if cursor is exactly at center.
-        Vector2 localDirection = Quaternion.Inverse(transform.rotation) * toMouseWorld;
-        if (localDirection.sqrMagnitude < 0.0001f)
-        {
-            Vector2 currentHandDirWorld = (Vector2)hands.transform.position - centerWorld;
-            localDirection = Quaternion.Inverse(transform.rotation) * currentHandDirWorld;
-            if (localDirection.sqrMagnitude < 0.0001f)
-            {
-                localDirection = Vector2.up;
-            }
-        }
-        localDirection.Normalize();
-
-        float denominator = Mathf.Sqrt(
-            (localDirection.x * localDirection.x) / (ellipseX * ellipseX) +
-            (localDirection.y * localDirection.y) / (ellipseY * ellipseY)
-        );
-        float boundaryScale = 1f / Mathf.Max(denominator, 0.0001f);
-
-        float mouseEllipseDistance = Mathf.Sqrt(
-            (toMouseWorld.x * toMouseWorld.x) / (ellipseX * ellipseX) +
-            (toMouseWorld.y * toMouseWorld.y) / (ellipseY * ellipseY)
-        );
-        float clampedReach = Mathf.Clamp(mouseEllipseDistance, minReach, maxReach);
-        PublishDebugValue("Reach", clampedReach);
-
-        Vector2 targetLocal = localDirection * (boundaryScale * clampedReach);
-        handsTargetWorld = centerWorld + (Vector2)(transform.rotation * targetLocal);
-
-        Vector2 current = handsRb2D.position;
-        Vector2 next = Vector2.Lerp(current, handsTargetWorld, handExtendSpeed * delta);
-        handsRb2D.MovePosition(next); 
-    } 
-
-    private void RotateHands(float delta)
-    {
-        Vector2 direction = hands.transform.position - transform.position;
-        float angle = Vector2.SignedAngle(Vector2.up, direction);
-        PublishDebugValue("Hands Angle", angle);
-
-        float next = Mathf.LerpAngle(handsRb2D.rotation, angle, handRotationSpeed * delta);
-        handsRb2D.MoveRotation(next);
+        playerTargetJoint.enabled = true;
     }
-    private void ComputePushForce(float delta)
+
+    private void EndGrab()
     {
-        if (!handsRb2D.IsTouchingLayers(interactableLayers)) return;
+        currState = PlayerState.Idle;
 
-        // Constraint violation: where the hand wants to be vs where it is.
-        Vector2 strain = handsTargetWorld - handsRb2D.position;
-        float strainMag = strain.magnitude;
-        if (strainMag < 0.0001f) return;
-        Vector2 pushDir = -strain / strainMag;              // reaction on the body
-        float magnitude = forceCurve.Evaluate(strainMag) * pushStrength;
-
-        // Apply at the HAND, not the body center, so the body can rotate around the "pivot."
-        playerRb2D.AddForceAtPosition(pushDir * magnitude, centerWorld);
+        handsTargetJoint.maxForce = defaultHoldForce;
+        playerTargetJoint.enabled = false;
     }
 
     #endregion
@@ -189,6 +171,22 @@ public class PlayerController : MonoBehaviour
         }
 
         handsCollisionLineRender.loop = true;
+        switch (currState)
+        {
+            case PlayerState.Idle:
+                handsCollisionLineRender.startColor = Color.cyan;
+                handsCollisionLineRender.endColor = Color.cyan;
+                break;
+            case PlayerState.Grabbing:
+                handsCollisionLineRender.startColor = Color.purple;
+                handsCollisionLineRender.endColor = Color.purple;
+                break;
+            default:
+                handsCollisionLineRender.startColor = Color.white;
+                handsCollisionLineRender.endColor = Color.white;
+                break;
+        }
+        
         Transform t = handsBoxCollider.transform;
         Vector2 o = handsBoxCollider.offset;
         Vector2 h = handsBoxCollider.size * 0.5f;

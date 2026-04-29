@@ -103,6 +103,7 @@ GameObject:
   - component: {fileID: 7090497369475361348}
   - component: {fileID: 8312152133584887501}
   - component: {fileID: 4605963046426447567}
+  - component: {fileID: 8596954846223690153}
   m_Layer: 6
   m_Name: Player
   m_TagString: Untagged
@@ -169,9 +170,9 @@ Rigidbody2D:
   m_Simulated: 1
   m_UseFullKinematicContacts: 0
   m_UseAutoMass: 0
-  m_Mass: 1
-  m_LinearDamping: 0
-  m_AngularDamping: 0.05
+  m_Mass: 7
+  m_LinearDamping: 0.2
+  m_AngularDamping: 10
   m_GravityScale: 1
   m_Material: {fileID: 0}
   m_IncludeLayers:
@@ -183,7 +184,7 @@ Rigidbody2D:
   m_Interpolate: 0
   m_SleepingMode: 1
   m_CollisionDetection: 0
-  m_Constraints: 0
+  m_Constraints: 4
 --- !u!114 &4605963046426447567
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -199,39 +200,32 @@ MonoBehaviour:
   interactableLayers:
     serializedVersion: 2
     m_Bits: 1
-  forceCurve:
-    serializedVersion: 2
-    m_Curve:
-    - serializedVersion: 3
-      time: 0
-      value: 0
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    - serializedVersion: 3
-      time: 1
-      value: 1
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    m_PreInfinity: 2
-    m_PostInfinity: 2
-    m_RotationOrder: 4
   hands: {fileID: 0}
-  handExtendSpeed: 10
-  handRotationSpeed: 20
   pushStrength: 10
   minReach: 0.5
-  maxReach: 2.7
-  capsule: {fileID: 218530006458910880}
-  ellipsePadding: 0.02
-  centerHeightOffset: 0.15
+  maxReach: 1.8
+  grabHoldForce: 10000
+  grabHoldMass: 100
+--- !u!257 &8596954846223690153
+TargetJoint2D:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4627658122189714502}
+  m_Enabled: 1
+  serializedVersion: 4
+  m_EnableCollision: 1
+  m_ConnectedRigidBody: {fileID: 0}
+  m_BreakForce: Infinity
+  m_BreakTorque: Infinity
+  m_BreakAction: 3
+  m_Anchor: {x: 0, y: 0}
+  m_Target: {x: 0, y: 0}
+  m_AutoConfigureTarget: 0
+  m_MaxForce: 100
+  m_DampingRatio: 1
+  m_Frequency: 5
 --- !u!1 &9202078662510236815
 GameObject:
   m_ObjectHideFlags: 0

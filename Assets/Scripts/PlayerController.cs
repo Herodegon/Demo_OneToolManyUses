@@ -8,12 +8,10 @@ public enum PlayerState
     Grabbing
 }
 
-[RequireComponent
-(
-    typeof(PlayerInput), 
-    typeof(Rigidbody2D),
-    typeof(TargetJoint2D)
-)]
+[RequireComponent(typeof(PlayerInput))]
+[RequireComponent(typeof(Rigidbody2D))]
+[RequireComponent(typeof(TargetJoint2D))]
+[RequireComponent(typeof(SpringJoint2D))]
 public class PlayerController : MonoBehaviour
 {
     public event Action<string, float> OnDebugValueChanged;
@@ -31,8 +29,10 @@ public class PlayerController : MonoBehaviour
 
     [Header("Grab Settings")]
     [SerializeField] private float grabHoldForce = 10000f;
+    [SerializeField] private float grabHoldMass = 100f;
 
     private float defaultHoldForce;
+    private float defaultHoldMass;
     private bool isColliding = false;
     
     #region Rigidbody2D Components
@@ -44,6 +44,7 @@ public class PlayerController : MonoBehaviour
     #region Joint2D Components
     private TargetJoint2D playerTargetJoint;
     private TargetJoint2D handsTargetJoint;
+    private SpringJoint2D handsSpringJoint;
     private InputActionAsset inputActions;
     private Vector2 mouseWorld;
 
@@ -63,20 +64,26 @@ public class PlayerController : MonoBehaviour
         inputActions.FindActionMap("Player").Enable();
 
         playerRb2D = GetComponent<Rigidbody2D>();
-        handsRb2D = hands.GetComponent<Rigidbody2D>();
-        handsBoxCollider = hands.GetComponentInChildren<BoxCollider2D>();
-
-        handsCollisionLineRender = GlobalHelper.CreateLineRenderer(hands, LineRendererType.Ellipse, Color.cyan);
-        mouseToHandsLineRender = GlobalHelper.CreateLineRenderer(gameObject, LineRendererType.Linear, Color.red);
     }
 
     void Start()
     {
+        handsRb2D = hands.GetComponent<Rigidbody2D>();
+        handsBoxCollider = hands.GetComponentInChildren<BoxCollider2D>();
+
         handsTargetJoint = hands.GetComponent<TargetJoint2D>();
         playerTargetJoint = GetComponent<TargetJoint2D>();
         playerTargetJoint.enabled = false;
 
+        handsSpringJoint = GetComponent<SpringJoint2D>();
+        handsSpringJoint.distance = maxReach;
+        handsSpringJoint.enabled = false;
+
+        handsCollisionLineRender = GlobalHelper.CreateLineRenderer(hands, LineRendererType.Ellipse, Color.cyan);
+        mouseToHandsLineRender = GlobalHelper.CreateLineRenderer(gameObject, LineRendererType.Linear, Color.red);
+
         defaultHoldForce = handsTargetJoint.maxForce;
+        defaultHoldMass = handsRb2D.mass;
     }
 
     #region Unity Lifecycle
@@ -92,26 +99,36 @@ public class PlayerController : MonoBehaviour
         float dist = toMouse.magnitude;
         Vector2 dir = dist > 0.0001f ? toMouse / dist : Vector2.up;
         float clampedDist = Mathf.Clamp(dist, minReach, maxReach);
-        Vector2 reaction = Vector2.zero;
-        switch (currState)
-        {
-            case PlayerState.Idle:
-                handsTargetJoint.target = (Vector2)transform.position + dir * clampedDist;
-                reaction = -handsTargetJoint.reactionForce * pushStrength;
-                playerRb2D.AddForceAtPosition(reaction, handsRb2D.position);
-                break;
-            case PlayerState.Grabbing:
-                playerTargetJoint.target = (Vector2)hands.transform.position + -dir * clampedDist;
-                reaction = -playerTargetJoint.reactionForce * pushStrength;
-                handsRb2D.AddForceAtPosition(reaction, playerRb2D.position);
-                break;
-        }
+        PublishDebugValue("Clamped Dist", clampedDist);
 
         isColliding = handsRb2D.IsTouchingLayers(interactableLayers);
         PublishDebugValue("Is Colliding", isColliding ? 1 : 0);
 
-        if (!isColliding) return;
-        PublishDebugValue("Reaction", reaction.magnitude);
+        // Activate spring joint if body is too far from hands
+        if (Vector2.Distance(playerRb2D.position, handsRb2D.position) > maxReach)
+        {
+            handsSpringJoint.enabled = true;
+            PublishDebugValue("Spring Joint Enabled", 1);
+        }
+        else if (handsSpringJoint.enabled)
+        {
+            handsSpringJoint.enabled = false;
+            PublishDebugValue("Spring Joint Enabled", 0);
+        }
+
+        Vector2 reaction = isColliding ? -handsTargetJoint.reactionForce : Vector2.zero;
+
+        switch (currState)
+        {
+            case PlayerState.Idle:
+                handsTargetJoint.target = (Vector2)transform.position + dir * clampedDist;
+                playerRb2D.AddForceAtPosition(reaction, handsRb2D.position);
+                PublishDebugValue("Reaction", reaction.magnitude);
+                break;
+            case PlayerState.Grabbing:
+                playerTargetJoint.target = (Vector2)hands.transform.position + -dir * clampedDist;
+                break;
+        }
     }
 
     void LateUpdate()
@@ -122,8 +139,12 @@ public class PlayerController : MonoBehaviour
 
     public void OnGrab(InputValue value)
     {
-        if (!isColliding) return;
-
+        if (!isColliding)
+        {
+            if (currState == PlayerState.Grabbing) EndGrab();
+            return;
+        }
+        
         bool pressed = value.isPressed;
         if (pressed && currState == PlayerState.Idle) BeginGrab();
         else if (!pressed && currState == PlayerState.Grabbing) EndGrab();
@@ -138,6 +159,7 @@ public class PlayerController : MonoBehaviour
         // drag it off.
         handsTargetJoint.target = handsRb2D.position;
         handsTargetJoint.maxForce = grabHoldForce;
+        handsRb2D.mass = grabHoldMass;
 
         playerTargetJoint.enabled = true;
     }
@@ -147,6 +169,8 @@ public class PlayerController : MonoBehaviour
         currState = PlayerState.Idle;
 
         handsTargetJoint.maxForce = defaultHoldForce;
+        handsRb2D.mass = defaultHoldMass;
+        
         playerTargetJoint.enabled = false;
     }
 
